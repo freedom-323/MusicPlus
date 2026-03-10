@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>三機協作遊戲</title>
+    <script src="https://unpkg.com"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; margin: 0; touch-action: manipulation; }
+        .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
+        .active { display: flex; }
+        button { padding: 15px 30px; font-size: 1.2rem; cursor: pointer; margin: 10px; border-radius: 10px; border: none; background: #007bff; color: white; }
+        input { padding: 12px; font-size: 1rem; margin: 5px; width: 220px; border-radius: 5px; border: none; }
+        #game-area { width: 100%; height: 70vh; background: #333; display: flex; justify-content: center; align-items: center; font-size: 3rem; border: 5px solid #444; }
+        .score-display { font-size: 2rem; color: #ffcc00; margin: 10px; }
+        .timer { font-size: 1.5rem; color: #00ff00; }
+    </style>
+</head>
+<body>
+
+    <div id="menu-screen" class="screen active">
+        <h1>三機協作遊戲</h1>
+        <input type="text" id="room-id" placeholder="頻道名稱">
+        <input type="password" id="room-pw" placeholder="密碼">
+        <button onclick="connectToRoom()">進入頻道</button>
+        <p id="status">請輸入頻道與密碼</p>
+    </div>
+
+    <div id="lobby-screen" class="screen">
+        <h2>頻道：<span id="display-room"></span></h2>
+        <p>連線狀態：<span id="member-count">1</span> / 3 人</p>
+        <button id="start-btn" onclick="broadcast('start-game')" style="display:none; background: #28a745;">全員開始</button>
+        <button onclick="location.reload()" style="background: #666;">退出</button>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div class="timer" id="timer-display">剩餘時間: 60s</div>
+        <div class="score-display">分數: <span id="score-val">0</span></div>
+        <div id="game-area" onclick="handleTap()"> 點擊此處 </div>
+        <button onclick="broadcast('end-game')" style="background: #dc3545; margin-top: 20px;">手動結束遊戲</button>
+    </div>
+
+    <div id="result-screen" class="screen">
+        <h1>遊戲結束</h1>
+        <div class="score-display">最終總分：<span id="final-score">0</span></div>
+        <button onclick="broadcast('reset-game')" style="background: #28a745;">重新開始</button>
+        <button onclick="location.reload()">更換頻道</button>
+    </div>
+
+    <audio id="ding-sound" src="https://actions.google.com"></audio>
+
+    <script>
+        let peer, connMap = new Map(), myId, isHost = false, score = 0, timeLeft = 60, timer;
+        let lastDingTime = 0, gameActive = false;
+
+        function connectToRoom() {
+            const room = document.getElementById('room-id').value;
+            const pw = document.getElementById('room-pw').value;
+            if(!room || !pw) return alert("請輸入完整資訊");
+            
+            const roomId = `room-${room}-${pw}`;
+            peer = new Peer(roomId); // 嘗試作為 Host 建立
+
+            peer.on('open', (id) => {
+                isHost = true;
+                myId = id;
+                updateLobbyUI();
+            });
+
+            peer.on('error', (err) => {
+                if(err.type === 'unavailable-id') {
+                    peer = new Peer(); // 作為 Client
+                    peer.on('open', () => {
+                        const conn = peer.connect(roomId);
+                        handleConnection(conn);
+                    });
+                }
+            });
+
+            peer.on('connection', handleConnection);
+            showScreen('lobby-screen');
+            document.getElementById('display-room').innerText = room;
+        }
+
+        function handleConnection(conn) {
+            conn.on('open', () => {
+                connMap.set(conn.peer, conn);
+                updateLobbyUI();
+                conn.on('data', data => {
+                    if(data === 'start-game') startGame();
+                    if(data === 'end-game') endGame();
+                    if(data === 'reset-game') showScreen('lobby-screen');
+                    if(data === 'ding') triggerDing();
+                    if(typeof data === 'number') score = data; // 同步分數
+                });
+            });
+            conn.on('close', () => { connMap.delete(conn.peer); updateLobbyUI(); });
+        }
+
+        function updateLobbyUI() {
+            const count = connMap.size + 1;
+            document.getElementById('member-count').innerText = count;
+            document.getElementById('start-btn').style.display = (count === 3 && isHost) ? 'block' : 'none';
+        }
+
+        function broadcast(msg) {
+            if(isHost) {
+                connMap.forEach(c => c.send(msg));
+                if(msg === 'start-game') startGame();
+                if(msg === 'end-game') endGame();
+                if(msg === 'reset-game') showScreen('lobby-screen');
+            } else {
+                // 如果不是 Host，發給 Host 轉發
+                Array.from(connMap.values())[0]?.send(msg);
+            }
+        }
+
+        function startGame() {
+            score = 0; timeLeft = 60; gameActive = true;
+            showScreen('game-screen');
+            if(isHost) {
+                timer = setInterval(gameLoop, 1000);
+                nextDing();
+            }
+        }
+
+        function gameLoop() {
+            timeLeft--;
+            document.getElementById('timer-display').innerText = `剩餘時間: ${timeLeft}s`;
+            if(timeLeft <= 0) broadcast('end-game');
+        }
+
+        function nextDing() {
+            if(!gameActive) return;
+            // 隨機等待 2-4 秒再發出下一次聲音
+            setTimeout(() => {
+                if(!gameActive) return;
+                const targets = [myId, ...Array.from(connMap.keys())];
+                const luckyOne = targets[Math.floor(Math.random() * targets.length)];
+                
+                if(luckyOne === myId) triggerDing();
+                else connMap.get(luckyOne).send('ding');
+                
+                nextDing(); // 安排下一次發聲
+            }, 2000 + Math.random() * 2000);
+        }
+
+        function triggerDing() {
+            document.getElementById('ding-sound').play();
+            lastDingTime = Date.now();
+            document.getElementById('game-area').style.background = "#007bff";
+            setTimeout(() => document.getElementById('game-area').style.background = "#333", 300);
+        }
+
+        function handleTap() {
+            if(!gameActive) return;
+            const now = Date.now();
+            // 判定時間：叮聲後 1.5 秒內點擊有效
+            if(now - lastDingTime < 1500) score++;
+            else score--;
+            
+            document.getElementById('score-val').innerText = score;
+            if(!isHost) Array.from(connMap.values())[0]?.send(score); // 同步分數給 Host
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(timer);
+            document.getElementById('final-score').innerText = score;
+            showScreen('result-screen');
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+    </script>
+</body>
+</html>
