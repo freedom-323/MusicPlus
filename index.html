@@ -3,234 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>三機協作遊戲</title>
+    <title>iPad 遊戲診斷版</title>
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; background: #121212; color: white; margin: 0; touch-action: manipulation; }
-        .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
+        body { font-family: -apple-system, system-ui; text-align: center; background: #000; color: #fff; margin: 0; }
+        .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
         .active { display: flex; }
-        button { padding: 18px 30px; font-size: 1.2rem; cursor: pointer; margin: 10px; border-radius: 12px; border: none; background: #007bff; color: white; font-weight: bold; width: 80%; max-width: 300px; }
-        input { padding: 15px; font-size: 1.1rem; margin: 8px; width: 80%; max-width: 300px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; text-align: center; }
-        #game-area { width: 100%; flex-grow: 1; background: #2a2a2a; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; border-radius: 20px; transition: background 0.1s; cursor: pointer; margin: 20px 0; border: 2px solid #444; }
-        .score-display { font-size: 2.2rem; color: #ffcc00; margin: 10px; font-weight: bold; }
-        .timer { font-size: 1.4rem; color: #00ff00; }
-        .status-msg { color: #888; font-size: 0.9rem; margin-top: 10px; }
-        #member-count { font-weight: bold; color: #007bff; }
+        button { padding: 18px; font-size: 1.2rem; cursor: pointer; margin: 10px; border-radius: 12px; border: none; background: #007bff; color: white; width: 250px; }
+        input { padding: 12px; font-size: 1.1rem; margin: 8px; width: 220px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; text-align: center; }
+        #debug-log { position: fixed; bottom: 0; width: 100%; font-size: 12px; color: #ff3b30; background: rgba(0,0,0,0.8); padding: 5px; height: 40px; overflow: hidden; }
+        .score-box { font-size: 2rem; color: #ffcc00; margin: 10px; }
+        #game-area { width: 85%; height: 50vh; background: #333; display: flex; justify-content: center; align-items: center; border-radius: 20px; font-size: 2rem; }
     </style>
 </head>
 <body>
 
-    <!-- 1. 登入畫面 -->
     <div id="menu-screen" class="screen active">
         <h1>三機協作遊戲</h1>
-        <input type="text" id="room-id" placeholder="頻道名稱 (例如: room1)">
+        <input type="text" id="room-id" placeholder="頻道名稱">
         <input type="password" id="room-pw" placeholder="密碼">
-        <button onclick="connectToRoom()">進入頻道</button>
-        <p class="status-msg" id="status">請輸入頻道資訊後按進入</p>
+        <button onclick="startConnection()">開始連線</button>
+        <p id="status-text">請輸入名稱及密碼</p>
     </div>
 
-    <!-- 2. 大廳畫面 -->
     <div id="lobby-screen" class="screen">
-        <h2>頻道：<span id="display-room"></span></h2>
-        <div style="font-size: 1.5rem; margin: 20px;">
-            連線人數：<span id="member-count">1</span> / 3
-        </div>
-        <p id="role-text" style="color: #aaa;">正在確認角色...</p>
-        <button id="start-btn" onclick="broadcast('start-game')" style="display:none; background: #28a745;">全員開始遊戲</button>
-        <button onclick="location.reload()" style="background: #444;">退出頻道</button>
-        <p class="status-msg">請確保三部平板都在此畫面</p>
+        <h2 id="room-header">頻道中</h2>
+        <p style="font-size: 1.5rem;">連線人數: <span id="member-count">1</span> / 3</p>
+        <p id="role-display" style="color: #00ff00;">連線中...</p>
+        <button id="start-btn" onclick="broadcast('start-game')" style="display:none; background: #28a745;">全員開始</button>
+        <button onclick="location.reload()">重新整理</button>
     </div>
 
-    <!-- 3. 遊戲畫面 -->
     <div id="game-screen" class="screen">
-        <div class="timer" id="timer-display">時間剩餘: 60s</div>
-        <div class="score-display">得分: <span id="score-val">0</span></div>
+        <div id="timer-val">時間: 60s</div>
+        <div class="score-box">分數: <span id="score-val">0</span></div>
         <div id="game-area" onclick="handleTap()">點擊此處</div>
-        <button onclick="broadcast('end-game')" style="background: #dc3545; height: 60px;">結束遊戲 (所有人)</button>
     </div>
 
-    <!-- 4. 結算畫面 -->
     <div id="result-screen" class="screen">
         <h1>遊戲結束</h1>
-        <div class="score-display">最終得分：<span id="final-score">0</span></div>
-        <button onclick="broadcast('reset-game')" style="background: #28a745;">回大廳重新開始</button>
-        <button onclick="location.reload()">更換頻道</button>
+        <p class="score-box">最終分數: <span id="final-score">0</span></p>
+        <button onclick="broadcast('reset-game')">回到大廳</button>
     </div>
 
-    <audio id="ding-sound" src="https://actions.google.com" preload="auto"></audio>
+    <div id="debug-log">系統日誌：等待連線...</div>
+    <audio id="ding-sound" src="https://actions.google.com"></audio>
 
     <script>
-        let peer = null, connMap = new Map(), isHost = false, score = 0, timeLeft = 60, timer;
-        let lastDingTime = 0, gameActive = false;
-        let roomFullId = "";
+        let peer, connMap = new Map(), isHost = false, score = 0, gameActive = false, lastDingTime = 0;
+        let roomTargetId = "";
 
-        // 連線邏輯
-        function connectToRoom() {
-            const room = document.getElementById('room-id').value;
+        function log(msg) {
+            document.getElementById('debug-log').innerText = "日誌：" + msg;
+            console.log(msg);
+        }
+
+        function startConnection() {
+            const name = document.getElementById('room-id').value;
             const pw = document.getElementById('room-pw').value;
-            if(!room || !pw) return alert("請輸入完整名稱及密碼");
+            if(!name || !pw) return alert("請輸入資訊");
             
-            roomFullId = `peer-game-${room}-${pw}`;
-            const status = document.getElementById('status');
-            status.innerText = "正在連線中...";
+            roomTargetId = `hdk-game-${name}-${pw}`;
+            log("初始化 PeerJS...");
 
-            // 隨機 ID 加入
-            peer = new Peer();
+            // iPad Safari 優化配置
+            peer = new Peer({
+                debug: 2,
+                config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+            });
 
-            peer.on('open', (myId) => {
-                // 嘗試連接「房主」
-                const conn = peer.connect(roomFullId);
-                
-                // 設定一個計時器，如果連不到房主，自己就當房主
-                const timeout = setTimeout(() => {
-                    if (connMap.size === 0) {
-                        status.innerText = "找不到房間，正在建立新頻道...";
-                        peer.destroy();
-                        createAsHost(roomFullId);
-                    }
-                }, 2500);
-
-                conn.on('open', () => {
-                    clearTimeout(timeout);
-                    isHost = false;
-                    document.getElementById('role-text').innerText = "已加入隊伍";
-                    handleConnection(conn);
-                    showScreen('lobby-screen');
-                });
+            peer.on('open', (id) => {
+                log("已取得 ID: " + id);
+                tryJoin();
             });
 
             peer.on('error', (err) => {
-                console.error(err);
-                if (err.type === 'unavailable-id') {
-                    status.innerText = "頻道 ID 被佔用，請換個名稱";
+                log("錯誤代碼: " + err.type);
+                if(err.type === 'unavailable-id') {
+                    log("ID 已被佔用，請換個名稱。");
                 }
             });
-
-            document.getElementById('display-room').innerText = room;
         }
 
-        function createAsHost(id) {
-            peer = new Peer(id);
-            peer.on('open', () => {
-                isHost = true;
-                document.getElementById('role-text').innerText = "你是房主 (待滿3人後可啟動)";
+        function tryJoin() {
+            log("嘗試連接房主...");
+            const conn = peer.connect(roomTargetId);
+            
+            const timeout = setTimeout(() => {
+                if (connMap.size === 0) {
+                    log("找不到房主，切換為房主模式...");
+                    peer.destroy();
+                    setupAsHost();
+                }
+            }, 3000);
+
+            conn.on('open', () => {
+                clearTimeout(timeout);
+                log("成功連上房主！");
+                isHost = false;
+                setupConn(conn);
                 showScreen('lobby-screen');
-                peer.on('connection', handleConnection);
+                document.getElementById('role-display').innerText = "你是成員";
+            });
+        }
+
+        function setupAsHost() {
+            peer = new Peer(roomTargetId, {
+                config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+            });
+            peer.on('open', () => {
+                log("房主模式啟動成功");
+                isHost = true;
+                showScreen('lobby-screen');
+                document.getElementById('role-display').innerText = "你是房主";
+                peer.on('connection', setupConn);
             });
             peer.on('error', (err) => {
-                alert("建立房間失敗，可能名稱已被佔用。");
-                location.reload();
+                log("房主啟動失敗: " + err.type);
+                alert("此頻道可能剛被關閉，請等 5 秒後再試，或更換名稱。");
             });
         }
 
-        function handleConnection(conn) {
+        function setupConn(conn) {
             connMap.set(conn.peer, conn);
-            updateLobbyUI();
-
+            updateLobby();
             conn.on('data', data => {
-                if (data === 'start-game') startGame();
-                if (data === 'end-game') endGame();
-                if (data === 'reset-game') { showScreen('lobby-screen'); score = 0; }
-                if (data === 'ding') triggerDing();
-                if (typeof data === 'number') { score = data; document.getElementById('score-val').innerText = score; }
-            });
-
-            conn.on('close', () => {
-                connMap.delete(conn.peer);
-                updateLobbyUI();
+                if(data === 'start-game') startGame();
+                if(data === 'reset-game') showScreen('lobby-screen');
+                if(data === 'ding') playDing();
+                if(typeof data === 'number') { score = data; document.getElementById('score-val').innerText = score; }
             });
         }
 
-        function updateLobbyUI() {
-            const count = connMap.size + 1;
-            document.getElementById('member-count').innerText = count;
-            if(isHost) {
-                document.getElementById('start-btn').style.display = (count === 3) ? 'block' : 'none';
-            }
+        function updateLobby() {
+            const c = connMap.size + 1;
+            document.getElementById('member-count').innerText = c;
+            if(isHost) document.getElementById('start-btn').style.display = (c === 3) ? "block" : "none";
         }
 
         function broadcast(msg) {
+            connMap.forEach(c => c.send(msg));
             if(isHost) {
-                connMap.forEach(c => c.send(msg));
                 if(msg === 'start-game') startGame();
-                if(msg === 'end-game') endGame();
-                if(msg === 'reset-game') { showScreen('lobby-screen'); score = 0; }
-            } else {
-                // 成員發送給房主轉發
-                connMap.forEach(c => c.send(msg));
+                if(msg === 'reset-game') showScreen('lobby-screen');
             }
         }
 
-        // 遊戲核心
         function startGame() {
-            score = 0; timeLeft = 60; gameActive = true;
-            document.getElementById('score-val').innerText = "0";
+            score = 0; gameActive = true;
             showScreen('game-screen');
             if(isHost) {
-                timer = setInterval(gameLoop, 1000);
-                scheduleNextDing();
+                let timeLeft = 60;
+                const timer = setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('timer-val').innerText = "時間: " + timeLeft + "s";
+                    if(timeLeft <= 0) { clearInterval(timer); gameActive = false; endGame(); }
+                }, 1000);
+                gameLoop();
             }
         }
 
         function gameLoop() {
-            timeLeft--;
-            document.getElementById('timer-display').innerText = `時間剩餘: ${timeLeft}s`;
-            if(timeLeft <= 0) broadcast('end-game');
-        }
-
-        function scheduleNextDing() {
             if(!gameActive) return;
-            // 隨機等待 1.5 - 3.5 秒
-            const delay = 1500 + Math.random() * 2000;
             setTimeout(() => {
                 if(!gameActive) return;
-                const clients = Array.from(connMap.keys());
-                const participants = [peer.id, ...clients];
-                const target = participants[Math.floor(Math.random() * participants.length)];
-                
-                if(target === peer.id) triggerDing();
-                else connMap.get(target).send('ding');
-                
-                scheduleNextDing();
-            }, delay);
+                const all = [peer.id, ...Array.from(connMap.keys())];
+                const target = all[Math.floor(Math.random() * all.length)];
+                if(target === peer.id) playDing(); else connMap.get(target).send('ding');
+                gameLoop();
+            }, 2000 + Math.random() * 2000);
         }
 
-        function triggerDing() {
+        function playDing() {
             const audio = document.getElementById('ding-sound');
             audio.currentTime = 0;
-            audio.play().catch(e => console.log("播放被阻擋"));
-            
+            audio.play();
             lastDingTime = Date.now();
-            const area = document.getElementById('game-area');
-            area.style.background = "#ffcc00";
-            area.style.color = "#000";
-            setTimeout(() => {
-                area.style.background = "#2a2a2a";
-                area.style.color = "#fff";
-            }, 300);
+            document.getElementById('game-area').style.background = "#ffcc00";
+            setTimeout(() => document.getElementById('game-area').style.background = "#333", 200);
         }
 
         function handleTap() {
             if(!gameActive) return;
-            const now = Date.now();
-            // 判定：叮聲後 1.2 秒內有效
-            if(now - lastDingTime < 1200) {
-                score++;
-            } else {
-                score--;
-            }
+            if(Date.now() - lastDingTime < 1500) score++; else score--;
             document.getElementById('score-val').innerText = score;
-            // 同步分數
-            if(isHost) {
-                connMap.forEach(c => c.send(score));
-            } else {
-                connMap.forEach(c => c.send(score));
-            }
+            broadcast(score);
         }
 
         function endGame() {
-            gameActive = false;
-            clearInterval(timer);
             document.getElementById('final-score').innerText = score;
             showScreen('result-screen');
         }
