@@ -105,7 +105,7 @@
         function toggleMusicLogic() {
             if (!gameActive) return;
 
-            const shouldPlay = Math.random() > 0.4; // 調整機率
+            const shouldPlay = Math.random() > 0.3; // 調整機率
             
             if (shouldPlay) {
                 audio.play().catch(() => console.log("等待互動中..."));
