@@ -1,213 +1,164 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iPad 三機協作遊戲 (穩定版)</title>
-    <script src="https://unpkg.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音感反應遊戲</title>
     <style>
-        body { font-family: -apple-system, sans-serif; text-align: center; background: #121212; color: #fff; margin: 0; overflow: hidden; }
-        .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
-        .active { display: flex; }
-        button { padding: 20px; font-size: 1.2rem; margin: 10px; border-radius: 15px; border: none; background: #007bff; color: white; width: 260px; font-weight: bold; cursor: pointer; }
-        input { padding: 15px; font-size: 1.2rem; margin: 8px; width: 240px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; text-align: center; }
-        #game-area { width: 85%; height: 45vh; background: #333; display: flex; justify-content: center; align-items: center; border-radius: 25px; font-size: 2rem; transition: 0.1s; -webkit-tap-highlight-color: transparent; }
-        #debug { position: fixed; bottom: 0; font-size: 11px; color: #aaa; width: 100%; background: rgba(0,0,0,0.7); padding: 6px; }
-        .active-tap { background: #ffcc00 !important; color: #000; transform: scale(1.02); }
+        :root {
+            --bg-color: #f8f9fa;
+            --primary-color: #007bff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background-color: var(--bg-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: background-color 0.1s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #ui-layer {
+            z-index: 10;
+            pointer-events: none;
+        }
+        #status { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; color: #333; }
+        #score { font-size: 4rem; margin: 10px 0; color: var(--primary-color); text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }
+        #timer { font-size: 1.2rem; color: #666; }
+        #start-btn {
+            pointer-events: auto;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            background-color: var(--success-color);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        #start-btn:active { transform: scale(0.95); }
+        .instructions { font-size: 0.9rem; color: #888; margin-top: 20px; }
     </style>
 </head>
-<body>
+<body onclick="handleGlobalClick()">
 
-    <div id="menu" class="screen active">
-        <h1>iPad 協作遊戲</h1>
-        <input type="text" id="rid" placeholder="房間名稱 (例如: room1)">
-        <input type="password" id="rpw" placeholder="密碼">
-        <button onclick="initAndStart()">進入遊戲</button>
-        <p style="font-size: 0.9rem; color: #888;">提示：請三部機輸入相同的名稱與密碼</p>
+    <div id="ui-layer">
+        <div id="status">準備好了嗎？</div>
+        <div id="score">0</div>
+        <div id="timer">剩餘時間: 60s</div>
+        <br>
+        <button id="start-btn" onclick="startGame(event)">開始遊戲</button>
+        <div class="instructions">點擊螢幕任一處得分，音樂停止時點擊扣分</div>
     </div>
 
-    <div id="lobby" class="screen">
-        <h2 id="room-info">正在同步房間...</h2>
-        <p style="font-size: 2.5rem;">連線人數: <span id="count">1</span> / 3</p>
-        <p id="role-text">正在確認身份...</p>
-        <button id="startBtn" onclick="broadcast('start')" style="display:none; background:#28a745;">全部就緒，開始！</button>
-    </div>
-
-    <div id="game" class="screen">
-        <div id="timer" style="font-size: 1.5rem; color: #ff4444;">60s</div>
-        <div style="font-size: 2rem; margin: 15px;">分數: <span id="score">0</span></div>
-        <div id="game-area" onpointerdown="handleTap()">等待信號...</div>
-    </div>
-
-    <div id="debug">狀態: 等待輸入</div>
-    <audio id="snd" src="https://assets.mixkit.co" preload="auto"></audio>
+    <!-- MP4 音訊來源 -->
+    <audio id="bgm" loop>
+        <source src="bgm.mp4" type="audio/mp4">
+        您的瀏覽器不支援 MP4 音訊播放。
+    </audio>
 
     <script>
-        let peer, connections = new Map(), isHost = false, gameScore = 0, isGameActive = false, lastSignalTime = 0;
-        const debugLog = m => document.getElementById('debug').innerText = "狀態: " + m;
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = false;
+        let timerInterval = null;
+        let musicTimeout = null;
 
-        // 解決 iPad 音效限制
-        function initAndStart() {
-            const audio = document.getElementById('snd');
-            audio.play().then(() => {
-                audio.pause();
-                audio.currentTime = 0;
-                startConnection();
-            }).catch(() => startConnection());
-        }
+        const audio = document.getElementById('bgm');
+        const scoreDisplay = document.getElementById('score');
+        const timerDisplay = document.getElementById('timer');
+        const statusDisplay = document.getElementById('status');
+        const startBtn = document.getElementById('start-btn');
 
-        function startConnection() {
-            const rid = document.getElementById('rid').value;
-            const rpw = document.getElementById('rpw').value;
-            if (!rid) return alert("請輸入房間名稱");
+        function startGame(e) {
+            // 阻止冒泡到 body 的點擊事件
+            e.stopPropagation();
             
-            const fullRoomId = `pad-game-${rid}-${rpw}`;
-            debugLog("正在嘗試加入房間...");
+            // 重置狀態
+            score = 0;
+            timeLeft = 60;
+            gameActive = true;
+            scoreDisplay.innerText = "0";
+            timerDisplay.innerText = `剩餘時間: ${timeLeft}s`;
+            startBtn.style.visibility = "hidden";
             
-            // 使用官方預設伺服器提升 Safari 穩定性
-            peer = new Peer(); 
+            // 啟動計時器
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = `剩餘時間: ${timeLeft}s`;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
 
-            peer.on('open', (myId) => {
-                const conn = peer.connect(fullRoomId, { serialization: 'json' });
-                
-                const joinTimeout = setTimeout(() => {
-                    debugLog("找不到現有房間，建立為房主...");
-                    peer.destroy();
-                    createRoom(fullRoomId);
-                }, 2500);
-
-                conn.on('open', () => {
-                    clearTimeout(joinTimeout);
-                    debugLog("已成功加入房間");
-                    isHost = false;
-                    setupConnection(conn);
-                    switchTo('lobby');
-                });
-            });
-
-            peer.on('error', (err) => {
-                if (err.type === 'peer-unavailable') {
-                    // 正常現象，會觸發 timeout 轉為房主
-                } else {
-                    debugLog("連線錯誤: " + err.type);
-                }
-            });
+            // 啟動隨機停啟
+            toggleMusicLogic();
         }
 
-        function createRoom(id) {
-            peer = new Peer(id);
-            peer.on('open', () => {
-                debugLog("房主模式已開啟");
-                isHost = true;
-                document.getElementById('role-text').innerText = "你是房主 (主控端)";
-                document.getElementById('room-info').innerText = "房間: " + document.getElementById('rid').value;
-                switchTo('lobby');
-                peer.on('connection', setupConnection);
-            });
-            peer.on('error', (err) => {
-                if (err.type === 'unavailable-id') {
-                    debugLog("ID 被佔用，嘗試使用備用 ID...");
-                    createRoom(id + "-" + Math.floor(Math.random()*999));
-                }
-            });
-        }
+        function toggleMusicLogic() {
+            if (!gameActive) return;
 
-        function setupConnection(conn) {
-            connections.set(conn.peer, conn);
-            updateLobbyUI();
+            const shouldPlay = Math.random() > 0.4; // 調整機率
             
-            conn.on('data', data => {
-                if (data === 'start') startGame();
-                if (data === 'ding') triggerFlash();
-                if (typeof data === 'number') {
-                    gameScore = data;
-                    document.getElementById('score').innerText = gameScore;
-                }
-            });
-
-            conn.on('close', () => {
-                connections.delete(conn.peer);
-                updateLobbyUI();
-            });
-        }
-
-        function updateLobbyUI() {
-            const total = connections.size + 1;
-            document.getElementById('count').innerText = total;
-            if (isHost) document.getElementById('startBtn').style.display = (total >= 1) ? 'block' : 'none';
-        }
-
-        function broadcast(msg) {
-            connections.forEach(c => c.send(msg));
-            if (isHost && msg === 'start') startGame();
-        }
-
-        function startGame() {
-            gameScore = 0;
-            isGameActive = true;
-            document.getElementById('score').innerText = "0";
-            switchTo('game');
-            
-            if (isHost) {
-                let timeLeft = 60;
-                const timerInterval = setInterval(() => {
-                    timeLeft--;
-                    document.getElementById('timer').innerText = timeLeft + "s";
-                    if (timeLeft <= 0) {
-                        isGameActive = false;
-                        clearInterval(timerInterval);
-                        alert("遊戲結束！分數: " + gameScore);
-                        location.reload();
-                    }
-                }, 1000);
-                gameLoop();
-            }
-        }
-
-        function gameLoop() {
-            if (!isGameActive) return;
-            setTimeout(() => {
-                if (!isGameActive) return;
-                const peers = [peer.id, ...Array.from(connections.keys())];
-                const target = peers[Math.floor(Math.random() * peers.length)];
-                
-                if (target === peer.id) triggerFlash();
-                else connections.get(target).send('ding');
-                
-                gameLoop();
-            }, 1500 + Math.random() * 2000);
-        }
-
-        function triggerFlash() {
-            const audio = document.getElementById('snd');
-            audio.currentTime = 0;
-            audio.play();
-            lastSignalTime = Date.now();
-            const area = document.getElementById('game-area');
-            area.innerText = "點擊！";
-            area.classList.add('active-tap');
-            setTimeout(() => {
-                area.classList.remove('active-tap');
-                area.innerText = "等待...";
-            }, 400);
-        }
-
-        function handleTap() {
-            if (!isGameActive) return;
-            const now = Date.now();
-            if (now - lastSignalTime < 800) {
-                gameScore++;
-                lastSignalTime = 0; // 避免單次信號重複計分
+            if (shouldPlay) {
+                audio.play().catch(() => console.log("等待互動中..."));
+                statusDisplay.innerText = "音樂播放中！點擊！";
+                statusDisplay.style.color = "#28a745";
             } else {
-                gameScore = Math.max(0, gameScore - 1);
+                audio.pause();
+                statusDisplay.innerText = "停！不要點擊！";
+                statusDisplay.style.color = "#dc3545";
             }
-            document.getElementById('score').innerText = gameScore;
-            broadcast(gameScore);
+
+            // 隨機切換間隔 (1.5秒 - 4秒)
+            const nextInterval = Math.floor(Math.random() * 2500) + 1500;
+            musicTimeout = setTimeout(toggleMusicLogic, nextInterval);
         }
 
-        function switchTo(screenId) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId).classList.add('active');
+        function handleGlobalClick() {
+            if (!gameActive) return;
+
+            // 判斷當前是否正在播放
+            const isPlaying = !audio.paused && audio.currentTime > 0 && !audio.ended;
+
+            if (isPlaying) {
+                score++;
+                flashBackground("#d4edda"); // 綠色回饋
+            } else {
+                score = Math.max(0, score - 1); // 扣分但不低於0
+                flashBackground("#f8d7da"); // 紅色回饋
+            }
+            
+            scoreDisplay.innerText = score;
+        }
+
+        function flashBackground(color) {
+            document.body.style.backgroundColor = color;
+            setTimeout(() => {
+                document.body.style.backgroundColor = "#f8f9fa";
+            }, 100);
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            clearTimeout(musicTimeout);
+            audio.pause();
+            audio.currentTime = 0;
+
+            statusDisplay.innerText = "遊戲結束！";
+            statusDisplay.style.color = "#333";
+            startBtn.style.visibility = "visible";
+            startBtn.innerText = "再次挑戰";
+            
+            alert(`時間到！您的最終得分是：${score}`);
         }
     </script>
 </body>
