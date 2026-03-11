@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音感反應遊戲 - MP4版</title>
+    <title>音感反應遊戲</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -132,7 +132,7 @@
                 score++;
                 flashBackground("#d4edda"); // 綠色回饋
             } else {
-                score = Math.max(0, score - 1); // 扣分但不低於0
+                score = Math.max(0, score - 3); // 扣分但不低於0
                 flashBackground("#f8d7da"); // 紅色回饋
             }
             
