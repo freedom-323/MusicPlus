@@ -2,123 +2,163 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>音樂節奏反應遊戲</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音感反應遊戲 - MP4版</title>
     <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --primary-color: #007bff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             text-align: center;
-            background-color: #f0f0f0;
+            background-color: var(--bg-color);
             margin: 0;
             height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            user-select: none; /* 防止頻繁點擊選中文字 */
+            overflow: hidden;
+            transition: background-color 0.1s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
-        #status { font-size: 24px; margin-bottom: 20px; }
-        #score { font-size: 48px; color: #ff4757; }
-        #timer { font-size: 20px; color: #2f3542; }
+        #ui-layer {
+            z-index: 10;
+            pointer-events: none;
+        }
+        #status { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; color: #333; }
+        #score { font-size: 4rem; margin: 10px 0; color: var(--primary-color); text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }
+        #timer { font-size: 1.2rem; color: #666; }
         #start-btn {
-            padding: 15px 30px;
-            font-size: 20px;
+            pointer-events: auto;
+            padding: 15px 40px;
+            font-size: 1.5rem;
             cursor: pointer;
-            background-color: #2ed573;
+            background-color: var(--success-color);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
         }
+        #start-btn:active { transform: scale(0.95); }
+        .instructions { font-size: 0.9rem; color: #888; margin-top: 20px; }
     </style>
 </head>
-<body>
+<body onclick="handleGlobalClick()">
 
-    <div id="status">準備好了嗎？</div>
-    <div id="score">分數: 0</div>
-    <div id="timer">剩餘時間: 60s</div>
-    <br>
-    <button id="start-btn" onclick="startGame()">開始遊戲</button>
+    <div id="ui-layer">
+        <div id="status">準備好了嗎？</div>
+        <div id="score">0</div>
+        <div id="timer">剩餘時間: 60s</div>
+        <br>
+        <button id="start-btn" onclick="startGame(event)">開始遊戲</button>
+        <div class="instructions">點擊螢幕任一處得分，音樂停止時點擊扣分</div>
+    </div>
 
-    <!-- 請更換為你想使用的音樂 URL -->
-    <audio id="bgm" loop src="https://dn721809.ca.archive.org/0/items/PachelbelCanonInDMajor/Pachelbel_%20Canon%20-%20In%20D%20Major.mp3"></audio>
+    <!-- MP4 音訊來源 -->
+    <audio id="bgm" loop>
+        <source src="bgm.mp4" type="audio/mp4">
+        您的瀏覽器不支援 MP4 音訊播放。
+    </audio>
 
     <script>
         let score = 0;
         let timeLeft = 60;
-        let isPlaying = false;
         let gameActive = false;
+        let timerInterval = null;
+        let musicTimeout = null;
+
         const audio = document.getElementById('bgm');
         const scoreDisplay = document.getElementById('score');
         const timerDisplay = document.getElementById('timer');
         const statusDisplay = document.getElementById('status');
         const startBtn = document.getElementById('start-btn');
 
-        function startGame() {
+        function startGame(e) {
+            // 阻止冒泡到 body 的點擊事件
+            e.stopPropagation();
+            
+            // 重置狀態
             score = 0;
             timeLeft = 60;
             gameActive = true;
-            scoreDisplay.innerText = "分數: 0";
-            startBtn.style.display = "none";
-            statusDisplay.innerText = "注意聽音樂！";
-
-            // 啟動倒計時
-            const timerInterval = setInterval(() => {
+            scoreDisplay.innerText = "0";
+            timerDisplay.innerText = `剩餘時間: ${timeLeft}s`;
+            startBtn.style.visibility = "hidden";
+            
+            // 啟動計時器
+            timerInterval = setInterval(() => {
                 timeLeft--;
                 timerDisplay.innerText = `剩餘時間: ${timeLeft}s`;
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    endGame();
-                }
+                if (timeLeft <= 0) endGame();
             }, 1000);
 
-            // 啟動音樂隨機停啟邏輯
-            toggleMusic();
+            // 啟動隨機停啟
+            toggleMusicLogic();
         }
 
-        function toggleMusic() {
+        function toggleMusicLogic() {
             if (!gameActive) return;
 
-            const isCurrentlyPlaying = !audio.paused;
+            const shouldPlay = Math.random() > 0.4; // 調整機率
             
-            if (isCurrentlyPlaying) {
+            if (shouldPlay) {
+                audio.play().catch(() => console.log("等待互動中..."));
+                statusDisplay.innerText = "音樂播放中！點擊！";
+                statusDisplay.style.color = "#28a745";
+            } else {
                 audio.pause();
-                statusDisplay.innerText = "安靜... (點擊扣分)";
-            } else {
-                audio.play().catch(e => console.log("需點擊後播放"));
-                statusDisplay.innerText = "音樂中！ (點擊加分)";
+                statusDisplay.innerText = "停！不要點擊！";
+                statusDisplay.style.color = "#dc3545";
             }
 
-            // 隨機在 2 到 5 秒之間切換狀態
-            const nextChange = Math.random() * 3000 + 2000;
-            setTimeout(toggleMusic, nextChange);
+            // 隨機切換間隔 (1.5秒 - 4秒)
+            const nextInterval = Math.floor(Math.random() * 2500) + 1500;
+            musicTimeout = setTimeout(toggleMusicLogic, nextInterval);
         }
 
-        // 監聽螢幕任一處點擊
-        document.body.addEventListener('mousedown', () => {
+        function handleGlobalClick() {
             if (!gameActive) return;
 
-            if (!audio.paused) {
+            // 判斷當前是否正在播放
+            const isPlaying = !audio.paused && audio.currentTime > 0 && !audio.ended;
+
+            if (isPlaying) {
                 score++;
-                document.body.style.backgroundColor = "#e1ffed"; // 點對變綠色
+                flashBackground("#d4edda"); // 綠色回饋
             } else {
-                score--;
-                document.body.style.backgroundColor = "#ffe1e1"; // 點錯變紅色
+                score = Math.max(0, score - 1); // 扣分但不低於0
+                flashBackground("#f8d7da"); // 紅色回饋
             }
             
-            scoreDisplay.innerText = `分數: ${score}`;
-            
-            // 短暫延遲後恢復背景色
+            scoreDisplay.innerText = score;
+        }
+
+        function flashBackground(color) {
+            document.body.style.backgroundColor = color;
             setTimeout(() => {
-                document.body.style.backgroundColor = "#f0f0f0";
+                document.body.style.backgroundColor = "#f8f9fa";
             }, 100);
-        });
+        }
 
         function endGame() {
             gameActive = false;
+            clearInterval(timerInterval);
+            clearTimeout(musicTimeout);
             audio.pause();
-            alert(`遊戲結束！你的最終得分是: ${score}`);
-            startBtn.style.display = "block";
-            startBtn.innerText = "再玩一次";
-            statusDisplay.innerText = "遊戲結束";
+            audio.currentTime = 0;
+
+            statusDisplay.innerText = "遊戲結束！";
+            statusDisplay.style.color = "#333";
+            startBtn.style.visibility = "visible";
+            startBtn.innerText = "再次挑戰";
+            
+            alert(`時間到！您的最終得分是：${score}`);
         }
     </script>
 </body>
