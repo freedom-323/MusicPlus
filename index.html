@@ -58,7 +58,7 @@
         <div id="timer">剩餘時間: 60s</div>
         <br>
         <button id="start-btn" onclick="startGame(event)">開始遊戲</button>
-        <div class="instructions">點擊螢幕任一處得一分，音樂停止時點擊扣三分</div>
+        <div class="instructions">點擊螢幕任一處得一分，音樂停止時點擊扣十分</div>
     </div>
 
     <!-- MP4 音訊來源 -->
@@ -133,7 +133,7 @@
                 score++;
                 flashBackground("#d4edda"); // 綠色回饋
             } else {
-                score = Math.max(0, score - 3); // 扣分但不低於0
+                score = Math.max(0, score - 10); // 扣分但不低於0
                 flashBackground("#f8d7da"); // 紅色回饋
             }
             
