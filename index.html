@@ -3,200 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>iPad 三機協作挑戰</title>
-    <!-- 修正 PeerJS 引用 -->
+    <title>iPad 三機協作遊戲 (穩定版)</title>
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; text-align: center; background: #1a1a1a; color: #fff; margin: 0; overflow: hidden; }
+        body { font-family: -apple-system, sans-serif; text-align: center; background: #121212; color: #fff; margin: 0; overflow: hidden; }
         .screen { display: none; height: 100vh; flex-direction: column; justify-content: center; align-items: center; }
         .active { display: flex; }
-        button { padding: 20px; font-size: 1.2rem; margin: 10px; border-radius: 15px; border: none; background: #007bff; color: white; width: 260px; font-weight: bold; }
-        input { padding: 15px; font-size: 1.2rem; margin: 8px; width: 240px; border-radius: 10px; border: 1px solid #444; background: #333; color: #fff; text-align: center; }
-        #game-area { width: 80%; height: 40vh; background: #444; display: flex; justify-content: center; align-items: center; border-radius: 30px; font-size: 2.5rem; transition: 0.1s; user-select: none; }
-        #debug { position: fixed; bottom: 0; font-size: 11px; color: #888; width: 100%; padding: 5px; background: rgba(0,0,0,0.5); }
-        .highlight { background: #ffcc00 !important; color: #000; transform: scale(1.05); }
+        button { padding: 20px; font-size: 1.2rem; margin: 10px; border-radius: 15px; border: none; background: #007bff; color: white; width: 260px; font-weight: bold; cursor: pointer; }
+        input { padding: 15px; font-size: 1.2rem; margin: 8px; width: 240px; border-radius: 10px; border: 1px solid #444; background: #222; color: #fff; text-align: center; }
+        #game-area { width: 85%; height: 45vh; background: #333; display: flex; justify-content: center; align-items: center; border-radius: 25px; font-size: 2rem; transition: 0.1s; -webkit-tap-highlight-color: transparent; }
+        #debug { position: fixed; bottom: 0; font-size: 11px; color: #aaa; width: 100%; background: rgba(0,0,0,0.7); padding: 6px; }
+        .active-tap { background: #ffcc00 !important; color: #000; transform: scale(1.02); }
     </style>
 </head>
 <body>
 
     <div id="menu" class="screen active">
         <h1>iPad 協作遊戲</h1>
-        <input type="text" id="rid" placeholder="房間名稱 (如: mygame)">
+        <input type="text" id="rid" placeholder="房間名稱 (例如: room1)">
         <input type="password" id="rpw" placeholder="密碼">
-        <button onclick="unlockAndStart()">進入頻道</button>
-        <p style="color: #888;">提示：房主先進入，隊員後進入</p>
+        <button onclick="initAndStart()">進入遊戲</button>
+        <p style="font-size: 0.9rem; color: #888;">提示：請三部機輸入相同的名稱與密碼</p>
     </div>
 
     <div id="lobby" class="screen">
-        <h2 id="room-display">等待隊員...</h2>
-        <p style="font-size: 3rem;">人數: <span id="count">1</span> / 3</p>
-        <p id="role">正在同步...</p>
-        <button id="startBtn" onclick="sendAll('start')" style="display:none; background:#28a745;">全員到齊，開始！</button>
+        <h2 id="room-info">正在同步房間...</h2>
+        <p style="font-size: 2.5rem;">連線人數: <span id="count">1</span> / 3</p>
+        <p id="role-text">正在確認身份...</p>
+        <button id="startBtn" onclick="broadcast('start')" style="display:none; background:#28a745;">全部就緒，開始！</button>
     </div>
 
     <div id="game" class="screen">
-        <div id="timer" style="font-size: 2rem; color: #ff4444;">60s</div>
-        <div style="font-size:2rem; margin: 20px;">分數: <span id="score">0</span></div>
-        <div id="game-area" onpointerdown="tap()">準備...</div>
+        <div id="timer" style="font-size: 1.5rem; color: #ff4444;">60s</div>
+        <div style="font-size: 2rem; margin: 15px;">分數: <span id="score">0</span></div>
+        <div id="game-area" onpointerdown="handleTap()">等待信號...</div>
     </div>
 
-    <div id="debug">狀態: 等待初始化</div>
-    
-    <!-- 使用一個標準的短音效 -->
+    <div id="debug">狀態: 等待輸入</div>
     <audio id="snd" src="https://assets.mixkit.co" preload="auto"></audio>
 
     <script>
-        let p, conns = new Map(), isH = false, sc = 0, active = false, lastSignal = 0;
-        const log = m => document.getElementById('debug').innerText = "狀態: " + m;
+        let peer, connections = new Map(), isHost = false, gameScore = 0, isGameActive = false, lastSignalTime = 0;
+        const debugLog = m => document.getElementById('debug').innerText = "狀態: " + m;
 
-        // iOS Safari 必須在使用者點擊按鈕時觸發音效解鎖
-        function unlockAndStart() {
+        // 解決 iPad 音效限制
+        function initAndStart() {
             const audio = document.getElementById('snd');
             audio.play().then(() => {
                 audio.pause();
                 audio.currentTime = 0;
-                start();
-            }).catch(e => {
-                console.log("Audio auto-play blocked", e);
-                start();
-            });
+                startConnection();
+            }).catch(() => startConnection());
         }
 
-        function start() {
+        function startConnection() {
             const rid = document.getElementById('rid').value;
             const rpw = document.getElementById('rpw').value;
-            if(!rid) return alert("請輸入頻道名稱");
+            if (!rid) return alert("請輸入房間名稱");
             
-            const roomId = `v3-room-${rid}-${rpw}`;
-            log("正在連線...");
+            const fullRoomId = `pad-game-${rid}-${rpw}`;
+            debugLog("正在嘗試加入房間...");
             
-            p = new Peer(); // 使用 PeerJS 預設伺服器
+            // 使用官方預設伺服器提升 Safari 穩定性
+            peer = new Peer(); 
 
-            p.on('open', (id) => {
-                log("已取得 ID，正在搜尋房間...");
-                const c = p.connect(roomId);
+            peer.on('open', (myId) => {
+                const conn = peer.connect(fullRoomId, { serialization: 'json' });
                 
-                const timeout = setTimeout(() => {
-                    log("沒人開房，你已成為房主");
-                    p.destroy();
-                    setupHost(roomId);
-                }, 3000);
+                const joinTimeout = setTimeout(() => {
+                    debugLog("找不到現有房間，建立為房主...");
+                    peer.destroy();
+                    createRoom(fullRoomId);
+                }, 2500);
 
-                c.on('open', () => {
-                    clearTimeout(timeout);
-                    log("已成功加入");
-                    isH = false;
-                    addConn(c);
-                    go('lobby');
+                conn.on('open', () => {
+                    clearTimeout(joinTimeout);
+                    debugLog("已成功加入房間");
+                    isHost = false;
+                    setupConnection(conn);
+                    switchTo('lobby');
                 });
             });
 
-            p.on('error', (err) => {
-                if(err.type === 'unavailable-id') setupHost(roomId);
-                else log("錯誤: " + err.type);
+            peer.on('error', (err) => {
+                if (err.type === 'peer-unavailable') {
+                    // 正常現象，會觸發 timeout 轉為房主
+                } else {
+                    debugLog("連線錯誤: " + err.type);
+                }
             });
         }
 
-        function setupHost(roomId) {
-            p = new Peer(roomId);
-            p.on('open', () => {
-                log("房主模式");
-                isH = true;
-                document.getElementById('role').innerText = "你是房主 (主控端)";
-                document.getElementById('room-display').innerText = "房間: " + document.getElementById('rid').value;
-                go('lobby');
-                p.on('connection', addConn);
+        function createRoom(id) {
+            peer = new Peer(id);
+            peer.on('open', () => {
+                debugLog("房主模式已開啟");
+                isHost = true;
+                document.getElementById('role-text').innerText = "你是房主 (主控端)";
+                document.getElementById('room-info').innerText = "房間: " + document.getElementById('rid').value;
+                switchTo('lobby');
+                peer.on('connection', setupConnection);
+            });
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    debugLog("ID 被佔用，嘗試使用備用 ID...");
+                    createRoom(id + "-" + Math.floor(Math.random()*999));
+                }
             });
         }
 
-        function addConn(c) {
-            conns.set(c.peer, c);
-            updateLobby();
-            c.on('data', d => {
-                if(d === 'start') run();
-                if(d === 'ding') flash();
-                if(typeof d === 'number') { sc = d; document.getElementById('score').innerText = sc; }
+        function setupConnection(conn) {
+            connections.set(conn.peer, conn);
+            updateLobbyUI();
+            
+            conn.on('data', data => {
+                if (data === 'start') startGame();
+                if (data === 'ding') triggerFlash();
+                if (typeof data === 'number') {
+                    gameScore = data;
+                    document.getElementById('score').innerText = gameScore;
+                }
             });
-            c.on('close', () => { conns.delete(c.peer); updateLobby(); });
+
+            conn.on('close', () => {
+                connections.delete(conn.peer);
+                updateLobbyUI();
+            });
         }
 
-        function updateLobby() {
-            const n = conns.size + 1;
-            document.getElementById('count').innerText = n;
-            if(isH) document.getElementById('startBtn').style.display = (n >= 1) ? 'block' : 'none';
+        function updateLobbyUI() {
+            const total = connections.size + 1;
+            document.getElementById('count').innerText = total;
+            if (isHost) document.getElementById('startBtn').style.display = (total >= 1) ? 'block' : 'none';
         }
 
-        function sendAll(m) {
-            conns.forEach(c => c.send(m));
-            if(isH && m === 'start') run();
+        function broadcast(msg) {
+            connections.forEach(c => c.send(msg));
+            if (isHost && msg === 'start') startGame();
         }
 
-        function run() {
-            sc = 0; active = true; 
+        function startGame() {
+            gameScore = 0;
+            isGameActive = true;
             document.getElementById('score').innerText = "0";
-            go('game');
-            if(isH) {
+            switchTo('game');
+            
+            if (isHost) {
                 let timeLeft = 60;
-                const timer = setInterval(() => {
+                const timerInterval = setInterval(() => {
                     timeLeft--;
                     document.getElementById('timer').innerText = timeLeft + "s";
-                    if(timeLeft <= 0) { 
-                        active = false; 
-                        clearInterval(timer);
-                        alert("遊戲結束！總分: " + sc); 
-                        location.reload(); 
+                    if (timeLeft <= 0) {
+                        isGameActive = false;
+                        clearInterval(timerInterval);
+                        alert("遊戲結束！分數: " + gameScore);
+                        location.reload();
                     }
                 }, 1000);
-                hostLoop();
+                gameLoop();
             }
         }
 
-        function hostLoop() {
-            if(!active) return;
-            const delay = 1500 + Math.random() * 2000;
+        function gameLoop() {
+            if (!isGameActive) return;
             setTimeout(() => {
-                if(!active) return;
-                const clients = Array.from(conns.values());
-                const totalPlayers = clients.length + 1;
-                const randomIndex = Math.floor(Math.random() * totalPlayers);
-
-                if(randomIndex === 0) flash(); // 房主自己閃
-                else clients[randomIndex-1].send('ding'); // 叫別人閃
+                if (!isGameActive) return;
+                const peers = [peer.id, ...Array.from(connections.keys())];
+                const target = peers[Math.floor(Math.random() * peers.length)];
                 
-                hostLoop();
-            }, delay);
+                if (target === peer.id) triggerFlash();
+                else connections.get(target).send('ding');
+                
+                gameLoop();
+            }, 1500 + Math.random() * 2000);
         }
 
-        function flash() {
+        function triggerFlash() {
             const audio = document.getElementById('snd');
             audio.currentTime = 0;
             audio.play();
-            lastSignal = Date.now();
+            lastSignalTime = Date.now();
             const area = document.getElementById('game-area');
-            area.innerText = "快點擊！";
-            area.classList.add('highlight');
+            area.innerText = "點擊！";
+            area.classList.add('active-tap');
             setTimeout(() => {
-                area.classList.remove('highlight');
-                area.innerText = "等待中...";
-            }, 500);
+                area.classList.remove('active-tap');
+                area.innerText = "等待...";
+            }, 400);
         }
 
-        function tap() {
-            if(!active) return;
+        function handleTap() {
+            if (!isGameActive) return;
             const now = Date.now();
-            if(now - lastSignal < 800) {
-                sc++;
-                lastSignal = 0; // 防止連點
+            if (now - lastSignalTime < 800) {
+                gameScore++;
+                lastSignalTime = 0; // 避免單次信號重複計分
             } else {
-                sc = Math.max(0, sc - 1);
+                gameScore = Math.max(0, gameScore - 1);
             }
-            document.getElementById('score').innerText = sc;
-            sendAll(sc); // 同步分數
+            document.getElementById('score').innerText = gameScore;
+            broadcast(gameScore);
         }
 
-        function go(id) {
+        function switchTo(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
+            document.getElementById(screenId).classList.add('active');
         }
     </script>
 </body>
