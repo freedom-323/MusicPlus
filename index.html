@@ -41,7 +41,10 @@
             margin-top: 10px;
         }
         #difficulty-select {
-            appearnace: none
+            -webkit-appearance: none;  /* 針對 Safari, Chrome */
+            -moz-appearance: none;     /* 針對 Firefox */
+            appearance: none;
+            outline: none;
             padding: 8px 15px;
             font-size: 1rem;
             border-radius: 10px;
@@ -91,7 +94,6 @@
     </audio>
 
     <script>
-        
         let score = 0;
         let timeLeft = 60;
         let gameActive = false;
@@ -185,8 +187,7 @@
             startBtn.innerText = "再次挑戰";
             
             alert(`時間到！您的最終得分是：${score}`);
-        }
-        
+        }   
     </script>
 </body>
 </html>
