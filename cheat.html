@@ -43,8 +43,10 @@
   <script>
   function cheat() {
       document.getElementById('cheat-btn').classList.add("hidden");
-      alert("時間到！您的最終得分是：399");
-      window.location.href = "index.html";
+      setTimeout(() => {
+          alert("時間到！您的最終得分是：399");
+          window.location.href = "index.html";
+      }, 50); 
     }
   </script>
 </body>
