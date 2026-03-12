@@ -7,9 +7,42 @@
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
-  <button onclick="showScore()">查看得分</button>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #cheat-btn {
+          background-color: #007AFF;
+          color: white;
+          border: none;
+          padding: 15px 40px;
+          font-size: 20px;
+          font-weight: bold;
+          border-radius: 20px;
+          cursor: pointer;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+          transition: background 0.3s;
+        }
+
+        #cheat-btn:hover {
+          background-color: #005BB5;
+        }
+
+        .hidden {
+          display: none;
+        }
+    </style>
+  <button id="cheat-btn" onclick="cheat()">一鍵通關</button>
   <script>
-  function showScore() {
+  function cheat() {
+      document.getElementById('cheat-btn').classList.add("hidden");
       alert("時間到！您的最終得分是：399");
       window.location.href = "index.html";
     }
