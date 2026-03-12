@@ -1,7 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-<script>
-  alert(`時間到！您的最終得分是：399`);
-  window.location.href = 'index.html';
-</script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音感反應遊戲</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+  <button onclick="showScore()">查看得分</button>
+  <script>
+  function showScore() {
+      alert("時間到！您的最終得分是：399");
+      window.location.href = "index.html";
+    }
+  </script>
+</body>
 </html>
