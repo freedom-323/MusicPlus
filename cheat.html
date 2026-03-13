@@ -3,51 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
     <title>音感反應遊戲</title>
-    <link rel="icon" type="image/png" href="favicon.png">
-</head>
-<body>
     <style>
         body {
             display: flex;
+            flex-direction: column; /* 讓元件垂直排列 */
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
             background-color: #f0f0f0;
             font-family: sans-serif;
+            gap: 20px; /* 輸入框與按鈕的間距 */
+        }
+
+        /* 統一風格的輸入框 */
+        #score-input {
+            padding: 12px 20px;
+            font-size: 18px;
+            border: 2px solid #007AFF;
+            border-radius: 15px;
+            outline: none;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            width: 200px;
+            transition: all 0.3s;
+        }
+
+        #score-input:focus {
+            box-shadow: 0 4px 15px rgba(0,122,255,0.3);
         }
 
         #cheat-btn {
-          background-color: #007AFF;
-          color: white;
-          border: none;
-          padding: 15px 40px;
-          font-size: 20px;
-          font-weight: bold;
-          border-radius: 20px;
-          cursor: pointer;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-          transition: background 0.3s;
+            background-color: #007AFF;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: background 0.3s;
         }
 
         #cheat-btn:hover {
-          background-color: #005BB5;
+            background-color: #005BB5;
         }
 
         .hidden {
-          display: none;
+            display: none !important;
         }
     </style>
-  <button id="cheat-btn" onclick="cheat()">一鍵通關</button>
-  <script>
-  function cheat() {
-      document.getElementById('cheat-btn').classList.add("hidden");
-      setTimeout(() => {
-          alert("時間到！您的最終得分是：399");
-          window.location.href = "index.html";
-      }, 200); 
-    }
-  </script>
+</head>
+<body>
+
+    <!-- 新增輸入框 -->
+    <input type="number" id="score-input" placeholder="輸入得分" value="399">
+    
+    <button id="cheat-btn" onclick="cheat()">一鍵通關</button>
+
+    <script>
+        function cheat() {
+            // 獲取使用者輸入的分數
+            const customScore = document.getElementById('score-input').value;
+            
+            // 同時隱藏按鈕與輸入框
+            document.getElementById('cheat-btn').classList.add("hidden");
+            document.getElementById('score-input').classList.add("hidden");
+
+            setTimeout(() => {
+                // 使用樣板字串顯示自訂分數
+                alert(`時間到！您的最終得分是：${customScore}`);
+                window.location.href = "index.html";
+            }, 200);
+        }
+    </script>
 </body>
 </html>
